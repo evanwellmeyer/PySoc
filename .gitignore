@@ -1,0 +1,11 @@
+__pycache__/
+reference/socrates/
+reference/isca/
+reference/build/obj*/
+reference/harness/obj_*/
+reference/harness/soc_ref*
+!reference/harness/soc_ref.F90
+reference/harness/soc_unit
+reference/harness/soc_isca
+reference/harness/dump_spectrum
+reference/harness/dump_wenyi
