@@ -48,13 +48,15 @@ def lookup_weights(p: torch.Tensor, t: torch.Tensor, p_lookup: torch.Tensor, t_l
     p_min = p_lookup[0] + torch.clamp(torch.abs(p_lookup[0]) * eps, min=eps)
     p_max = p_lookup[-1] - torch.clamp(torch.abs(p_lookup[-1]) * eps, min=eps)
     p_layer = torch.minimum(torch.maximum(torch.log(p), p_min), p_max)
-    jp = torch.searchsorted(p_lookup, p_layer.detach().contiguous(), right=True) - 1
+    # the clamps only matter for non-finite inputs, which then give NaN instead of an index error
+    jp = torch.clamp(torch.searchsorted(p_lookup, p_layer.detach().contiguous(), right=True) - 1, 0, n_pre - 2)
     fp = (p_layer - p_lookup[jp]) / (p_lookup[jp + 1] - p_lookup[jp])
 
     def t_index(row):
         tl = t_lookup[row]  # (..., n_tmp)
         t_lay = torch.minimum(torch.maximum(t, tl[..., 0] * (1.0 + eps)), tl[..., -1] * (1.0 - eps))
         j = torch.searchsorted(tl.detach().contiguous(), t_lay.detach().unsqueeze(-1).contiguous(), right=True)[..., 0] - 1
+        j = torch.clamp(j, 0, n_tmp - 2)
         lo = torch.gather(tl, -1, j.unsqueeze(-1))[..., 0]
         hi = torch.gather(tl, -1, (j + 1).unsqueeze(-1))[..., 0]
         return j, (t_lay - lo) / (hi - lo)

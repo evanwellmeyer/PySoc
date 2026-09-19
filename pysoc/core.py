@@ -539,7 +539,7 @@ class SocratesLW(nn.Module):
             out["intermediates"] = dict(
                 lookup_weights=weights, k_abs=k_abs, k_grey_tot=k_grey_tot, k_eqv=k_eqv, k_grey_final=k_grey_final,
                 planck_flux=planck_flux, planck_diff=planck_diff, planck_diff_2=planck_diff_2,
-                planck_ground=planck_ground, gpoint_flux_up=up, gpoint_flux_down=down)
+                planck_ground=planck_ground, tau=tau, gpoint_flux_up=up, gpoint_flux_down=down)
         return out
 
 
@@ -660,7 +660,8 @@ class SocratesSW(nn.Module):
         if return_intermediates:
             out["intermediates"] = dict(
                 lookup_weights=weights, k_abs=k_abs, k_grey_tot=k_grey_tot, k_ext_scat=k_ext_scat, k_eqv=k_eqv,
-                k_grey_final=k_grey_final, adjust_solar_ke=adjust, gpoint_flux_up=up_clr, gpoint_flux_down=down_clr,
+                k_grey_final=k_grey_final, adjust_solar_ke=adjust, tau=tau, omega=omega,
+                gpoint_flux_up=up_clr, gpoint_flux_down=down_clr,
                 gpoint_flux_direct=direct_clr)
         return out
 

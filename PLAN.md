@@ -81,7 +81,7 @@ LW only: `diff_planck_source`, `monochromatic_gas_flux`, `two_coeff_fast_lw`,
 
 ## Phases — each ends with a test gate against the Fortran
 
-Status: phases 0–7 are done (101 tests, `pytest tests/`). Phase 8 (extras) is optional.
+Status: phases 0–7 and 9 are done (108 tests, `pytest tests/`). Phase 8 (extras) is optional.
 
 0. ✅ **Infrastructure**: reference build, Isca-mirroring driver, case generator, call trace
    (`reference/build_all.sh`).
@@ -105,8 +105,8 @@ Status: phases 0–7 are done (101 tests, `pytest tests/`). Phase 8 (extras) is 
    * Gradients are checked against finite differences and stay finite at night, with grazing sun and with zero humidity.
    * `compile=True`: per-kernel `torch.compile`, validated against eager on first use. The MPS inductor
      backend miscompiled one fused kernel, and the validator falls back to eager when that happens.
-   * Speed, 8192 columns × 40 layers, M3 Max: Fortran on one core takes 0.99 s (LW) and 0.73 s (SW);
-     PyTorch on MPS float32 takes 0.34 s / 0.35 s eager and 0.11 s / 0.09 s compiled.
+   * Speed: see "Benchmark" below. On an M3 Max, compiled MPS float32 matches about 3–6 Fortran cores
+     and is 2–3× slower than 12-core Fortran.
 6. ✅ **Isca interface** (`pysoc/isca.py`, `IscaSocrates`). *Gate:* `soc_isca` (Isca's preprocessing copied
    verbatim around two socrates_calc calls, with the T update in between) matches heating rates, fluxes,
    half-level T and spectral OLR for default, namelist-modified and dry/no-ozone settings.
@@ -116,8 +116,7 @@ Status: phases 0–7 are done (101 tests, `pytest tests/`). Phase 8 (extras) is 
    *Gate:* `soc_ref` with `do_clouds` (broken and overcast skies, sub-threshold fractions, reff outside the valid range)
    matches all-sky and clear fluxes, clear band fluxes, heating rates and total cloud cover. SW agrees to 1e-9 W m⁻²
    and LW to 2e-8. `soc_isca` with clouds matches end to end. Gradients agree with finite differences; float32 on
-   CPU/MPS is within 1.3e-3 W m⁻² and 1.6e-4 K/day. Speed for 8192 cloudy columns on MPS, compiled:
-   LW 0.37 s, SW 0.27 s (single-core Fortran: 3.3 s and 1.5 s).
+   CPU/MPS is within 1.3e-3 W m⁻² and 1.6e-4 K/day.
    Findings:
    * Isca's liquid clouds use drop type 5 (Padé 2). Ice type 11 (Baran) is set up but always receives zero ice,
      so it contributes nothing and is not ported.
@@ -132,3 +131,30 @@ Status: phases 0–7 are done (101 tests, `pytest tests/`). Phase 8 (extras) is 
      coefficients, with the float64 cap.
    * Isca's `idealized_moist_phys` converts `reff_rad` from microns to metres before calling SOCRATES.
 8. **Extras** (optional): other spectral files (GA9, planetary), SES2, radiation time-stepping and astronomy helpers.
+9. ✅ **Teaching notebooks** (`notebooks/`, Colab). Supporting code: `pysoc/column.py` (idealised columns on Isca's
+   `uneven_sigma` grid, Manabe–Wetherald humidity, ozone scaled to a Dobson total, `liquid_cloud`), `pysoc/spectra.py`
+   (GA7 files from the local checkout, or downloaded at the validated SOCRATES commit with SHA-256 checks),
+   `pyproject.toml`. `IscaSocrates` now also accepts scalars for surface/gas inputs, returns per-band fluxes and,
+   on request, the LW/SW intermediates (including per-k-term optical depths). Non-finite temperatures now give NaN
+   instead of an index error in the p/T lookup. *Gate:* `tests/test_column.py`; both notebooks run end to end in a
+   fresh Python 3.12 environment with PySoc installed from the repository and the spectral files downloaded.
+
+## Benchmark (`tools/benchmark_parallel.py`, results in `tools/benchmark_parallel_results.json`)
+
+8192 columns × 40 layers, Apple M3 Max (12 performance + 4 efficiency cores), mains power, High Power mode.
+Only the radiation calculation is timed, with no file I/O or spectral-file reading. The Fortran
+(`reference/harness/soc_bench`) calls SOCRATES in Isca's chunks of 16 columns; the columns are split across
+N processes as Isca's MPI decomposition would split them, all released together, and the slowest process sets
+the time. PySoc runs on MPS in float32 with inputs already on the device.
+
+| case | Fortran, 1 core | Fortran, 12 cores | PySoc MPS, compiled | PySoc MPS, eager |
+|---|---|---|---|---|
+| clear LW  | 0.70 s | 0.063 s | 0.11 s  | 0.31 s |
+| clear SW  | 0.45 s | 0.041 s | 0.091 s | 0.29 s |
+| cloudy LW | 1.33 s | 0.12 s  | 0.29 s  | 0.61 s |
+| cloudy SW | 0.79 s | 0.071 s | 0.24 s  | 0.62 s |
+
+* Fortran scales almost linearly to the 12 performance cores (11×); the efficiency cores add little.
+* Isca's chunking matters: one 8192-column call is up to 2× slower on multiple cores (cache effects).
+* Earlier single-core figures in this project (0.99 s / 0.73 s clear, 3.3 s cloudy) were taken on battery with
+  Low Power Mode on and, for clouds, included file I/O; they are superseded by this table.

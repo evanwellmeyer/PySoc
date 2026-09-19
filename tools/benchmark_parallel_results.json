@@ -1,0 +1,95 @@
+{
+  "power": {
+    "source": "Now drawing from 'AC Power'",
+    "low_power_mode": "2"
+  },
+  "cpu": "Apple M3 Max, 12 performance + 4 efficiency cores",
+  "columns": 8192,
+  "layers": 40,
+  "cases": {
+    "clear_lw": {
+      "fortran": {
+        "chunk16_proc1": 0.699497,
+        "chunk16_proc2": 0.356216,
+        "chunk16_proc4": 0.181688,
+        "chunk16_proc8": 0.093827,
+        "chunk16_proc12": 0.062608,
+        "chunk16_proc16": 0.063181,
+        "chunk8192_proc1": 0.694277,
+        "chunk8192_proc2": 0.347249,
+        "chunk8192_proc4": 0.192661,
+        "chunk8192_proc8": 0.12431,
+        "chunk8192_proc12": 0.115797,
+        "chunk8192_proc16": 0.105102
+      },
+      "pysoc": {
+        "mps_float32_compiled": 0.10994745814241469,
+        "mps_float32_eager": 0.30710524995811284
+      }
+    },
+    "clear_sw": {
+      "fortran": {
+        "chunk16_proc1": 0.449324,
+        "chunk16_proc2": 0.229111,
+        "chunk16_proc4": 0.117758,
+        "chunk16_proc8": 0.058824,
+        "chunk16_proc12": 0.041343,
+        "chunk16_proc16": 0.036362,
+        "chunk8192_proc1": 0.527871,
+        "chunk8192_proc2": 0.247422,
+        "chunk8192_proc4": 0.137001,
+        "chunk8192_proc8": 0.079933,
+        "chunk8192_proc12": 0.073792,
+        "chunk8192_proc16": 0.066968
+      },
+      "pysoc": {
+        "mps_float32_compiled": 0.09119183383882046,
+        "mps_float32_eager": 0.2940464159473777
+      }
+    },
+    "cloudy_lw": {
+      "fortran": {
+        "chunk16_proc1": 1.331558,
+        "chunk16_proc2": 0.684215,
+        "chunk16_proc4": 0.348308,
+        "chunk16_proc8": 0.174373,
+        "chunk16_proc12": 0.118526,
+        "chunk16_proc16": 0.119384,
+        "chunk8192_proc1": 2.41158,
+        "chunk8192_proc2": 1.093318,
+        "chunk8192_proc4": 0.561792,
+        "chunk8192_proc8": 0.286842,
+        "chunk8192_proc12": 0.236595,
+        "chunk8192_proc16": 0.224866
+      },
+      "pysoc": {
+        "mps_float32_compiled": 0.2869178329128772,
+        "mps_float32_eager": 0.6072275419719517
+      }
+    },
+    "cloudy_sw": {
+      "fortran": {
+        "chunk16_proc1": 0.791655,
+        "chunk16_proc2": 0.404099,
+        "chunk16_proc4": 0.20612,
+        "chunk16_proc8": 0.103765,
+        "chunk16_proc12": 0.07149,
+        "chunk16_proc16": 0.071425,
+        "chunk8192_proc1": 1.014408,
+        "chunk8192_proc2": 0.449847,
+        "chunk8192_proc4": 0.249271,
+        "chunk8192_proc8": 0.143272,
+        "chunk8192_proc12": 0.136724,
+        "chunk8192_proc16": 0.128462
+      },
+      "pysoc": {
+        "mps_float32_compiled": 0.23997262492775917,
+        "mps_float32_eager": 0.6218438330106437
+      }
+    }
+  },
+  "power_after": {
+    "source": "Now drawing from 'AC Power'",
+    "low_power_mode": "2"
+  }
+}

@@ -30,6 +30,10 @@ from .core import Atmosphere, SocratesLW, SocratesSW
 # gas_list_pcf.F90 identifiers
 IP_H2O, IP_CO2, IP_O3, IP_N2O, IP_CO, IP_CH4, IP_O2 = 1, 2, 3, 4, 5, 6, 7
 IP_SO2, IP_N2, IP_CFC11, IP_CFC12, IP_CFC113, IP_HCFC22, IP_HFC134A = 9, 13, 14, 15, 16, 17, 19
+IP_OCS = 25
+GAS_NAMES = {IP_H2O: "H2O", IP_CO2: "CO2", IP_O3: "O3", IP_N2O: "N2O", IP_CO: "CO", IP_CH4: "CH4", IP_O2: "O2",
+             IP_SO2: "SO2", IP_N2: "N2", IP_CFC11: "CFC-11", IP_CFC12: "CFC-12", IP_CFC113: "CFC-113",
+             IP_HCFC22: "HCFC-22", IP_HFC134A: "HFC-134a", IP_OCS: "OCS"}
 
 # socrates_config_mod.f90 defaults for the well-mixed gases (kg/kg).  In Isca these
 # are applied by set_atm whenever the gas is present in the spectral file,
@@ -132,12 +136,19 @@ class IscaSocrates(nn.Module):
         return atm, d_mass * CP_AIR
 
     def forward(self, temp, q, p_full, p_half, z_full, z_half, t_surf, albedo, coszen, delta_t,
-                rrsun=1.0, ozone=None, co2=None, cf_rad=None, reff_rad=None, qcl_rad=None):
+                rrsun=1.0, ozone=None, co2=None, cf_rad=None, reff_rad=None, qcl_rad=None,
+                return_intermediates=False):
         """All fields (..., L) or (..., L+1) for half levels, surface fields (...).
+
+        ``t_surf``, ``albedo``, ``coszen``, ``ozone`` and ``co2`` may also be anything that broadcasts
+        to those shapes (e.g. a Python float).
 
         ``ozone`` and ``co2`` are mass mixing ratios; ``co2=None`` uses ``config.co2_ppmv``.
         Returns a dict of tensors with the leading shape restored; heating rates in K/s,
-        fluxes in W/m2 (``*_up``/``*_down`` on half levels, index 0 at the top).
+        fluxes in W/m2 (``*_up``/``*_down`` on half levels, index 0 at the top; ``*_band`` fluxes
+        have a trailing band dimension).
+        ``return_intermediates=True`` adds ``lw_intermediates`` / ``sw_intermediates``, the
+        :class:`SocratesLW` / :class:`SocratesSW` intermediates with the columns flattened.
         """
         cfg = self.config
         lead = temp.shape[:-1]
@@ -145,18 +156,19 @@ class IscaSocrates(nn.Module):
         flat = lambda x, n: x.reshape(-1, n)  # noqa: E731
         temp, q, p_full, z_full = (flat(x, L) for x in (temp, q, p_full, z_full))
         p_half, z_half = flat(p_half, L + 1), flat(z_half, L + 1)
-        t_surf, albedo, coszen = (x.reshape(-1) for x in (t_surf, albedo, coszen))
+        as_lead = lambda x: torch.broadcast_to(torch.as_tensor(x, dtype=temp.dtype, device=temp.device), lead)  # noqa: E731
+        t_surf, albedo, coszen = (as_lead(x).reshape(-1) for x in (t_surf, albedo, coszen))
         P = temp.shape[0]
 
         h2o = q / (1.0 - q) if cfg.account_for_effect_of_water else torch.zeros_like(q)
         if ozone is None or not cfg.account_for_effect_of_ozone:
             o3 = torch.zeros_like(q)
         else:
-            o3 = torch.broadcast_to(ozone, lead + (L,)).reshape(P, L)
+            o3 = torch.broadcast_to(torch.as_tensor(ozone, dtype=q.dtype, device=q.device), lead + (L,)).reshape(P, L)
         if co2 is None:
             co2 = torch.full_like(q, co2_mmr_from_ppmv(cfg.co2_ppmv, cfg.input_co2_mmr))
         else:
-            co2 = torch.broadcast_to(co2, lead + (L,)).reshape(P, L)
+            co2 = torch.broadcast_to(torch.as_tensor(co2, dtype=q.dtype, device=q.device), lead + (L,)).reshape(P, L)
         gas = self._gases(h2o, o3, co2, q)
         cloud = None
         if cf_rad is not None:
@@ -168,12 +180,13 @@ class IscaSocrates(nn.Module):
         solar_irrad = torch.broadcast_to(cfg.stellar_constant * rrsun, lead).reshape(P)
 
         atm_lw, heat_capacity = self._column(temp, p_full, p_half, z_full, z_half, gas)
-        lw = self.lw(atm_lw, t_surf, cfg.input_planet_emissivity, cloud=cloud)
+        lw = self.lw(atm_lw, t_surf, cfg.input_planet_emissivity, cloud=cloud,
+                     return_intermediates=return_intermediates)
         tdt_lw = lw["flux_divergence"] / heat_capacity
 
         temp_sw = temp + tdt_lw * delta_t
         atm_sw, heat_capacity_sw = self._column(temp_sw, p_full, p_half, z_full, z_half, gas)
-        sw = self.sw(atm_sw, coszen, solar_irrad, albedo, cloud=cloud)
+        sw = self.sw(atm_sw, coszen, solar_irrad, albedo, cloud=cloud, return_intermediates=return_intermediates)
         tdt_sw = sw["flux_divergence"] / heat_capacity_sw
 
         out = dict(
@@ -181,6 +194,8 @@ class IscaSocrates(nn.Module):
             flux_lw_up=lw["flux_up"], flux_lw_down=lw["flux_down"],
             flux_sw_up=sw["flux_up"], flux_sw_down=sw["flux_down"], flux_sw_direct=sw["flux_direct"],
             t_half=atm_lw.t_level, co2=co2, ozone=o3,
+            flux_lw_up_band=lw["flux_up_band"], flux_lw_down_band=lw["flux_down_band"],
+            flux_sw_up_band=sw["flux_up_band"], flux_sw_down_band=sw["flux_down_band"],
         )
         # Isca diagnostics (socrates_interface.F90 / run_socrates)
         out["soc_flux_lw"] = lw["flux_up"] - lw["flux_down"]
@@ -215,4 +230,7 @@ class IscaSocrates(nn.Module):
                 return v
             return v.reshape(lead + v.shape[1:])
 
-        return {k: restore(v) for k, v in out.items()}
+        out = {k: restore(v) for k, v in out.items()}
+        if return_intermediates:
+            out["lw_intermediates"], out["sw_intermediates"] = lw["intermediates"], sw["intermediates"]
+        return out

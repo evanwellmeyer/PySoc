@@ -9,3 +9,6 @@ reference/harness/soc_unit
 reference/harness/soc_isca
 reference/harness/dump_spectrum
 reference/harness/dump_wenyi
+/build/
+*.egg-info/
+.ipynb_checkpoints/
